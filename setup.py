@@ -15,7 +15,6 @@ setup(
     license='LICENSE.txt',
     description='<ADD DESCRIPTION>',
     long_description=open('README.txt').read(),
-    install_requires=[
-                      
+    install_requires=['human_time_formatter >= 1.0.0.5'
                      ],
 )
