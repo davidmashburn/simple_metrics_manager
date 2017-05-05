@@ -19,7 +19,7 @@ class StorageInterface(object):
     def exists(self, name):
         pass
 
-    def save(self, name):
+    def save(self, name, data):
         pass
 
     def load(self, name):
@@ -27,13 +27,13 @@ class StorageInterface(object):
 
 def _create_tmp(filepath):
     '''Change something.ext into something.tmp.ext'''
-    f, ext = os.path.splitext(filepath)
-    return f + '.tmp' + ext
+    return '{}.tmp{}'.format(*os.path.splitext(filepath))
 
 class FileBasedStorageInterface(StorageInterface):
     def __init__(self, file_ext, metrics_dir):
-        self.file_ext=file_ext
+        self.file_ext = file_ext
         self.metrics_dir = metrics_dir
+        StorageInterface.__init__(self)
 
     def _get_filepath(self, name):
         '''Get the filename for any given metric'''
@@ -92,9 +92,10 @@ class NpzStorageInterface(FileBasedStorageInterface):
     This uses the metric data type to route the storage type, so ensure you
     pass an array instead of a list if you mean to store an array ;)
     '''
-    def __init__(self, metrics_dir, compress=False, allow_pickle=False):
+    def __init__(self, metrics_dir, compress=False, allow_pickle=False, list_limit=None):
         self.compress = compress
         self.allow_pickle = allow_pickle
+        self.list_limit = list_limit
         FileBasedStorageInterface.__init__(self, file_ext='.npz', metrics_dir=metrics_dir)
 
     def _load(self, filepath):
@@ -109,18 +110,22 @@ class NpzStorageInterface(FileBasedStorageInterface):
                       (data, {})                           # Use list storage
                       if isinstance(data, (list, tuple)) else
                       ([data], {}))                       # Use singleton storage
+        if self.list_limit is not None and len(args) > self.list_limit:
+            msg = 'Data violates list length limit! Use an array instead (or adjust the limit).'
+            raise TypeError(msg)
+
         _savez(filepath, args, kwds, self.compress, self.allow_pickle)
 
-# This could work by storing a "document" version of a number of different
-# metrics in a single file which would cut down on file usage, but make
-# it harder to update with new metrics.
-##class NpyConsolidatedStorageInterface(StorageInterface)
-#class NpzStorageInterface(StorageInterface)
-# Pytables might be another alternative.
-##class PyTablesStorageInterface(StorageInterface)
+# A storage interface could also work by storing a "document" version of a
+# number of different metrics in a single file which would cut down on file
+# usage, but make it harder to update with new metrics.
+#
+# class Np(y/z)ConsolidatedStorageInterface(StorageInterface)
+# or
+# class PyTablesStorageInterface(StorageInterface)
 
-##    ........eventually probably a better way for some applications:)
-#class SQLStorageInterface(StorageInterface):
+# And this might be a better way for some applications:
+# class SQLStorageInterface(StorageInterface)
 
 if __name__ == '__main__':
     pass
