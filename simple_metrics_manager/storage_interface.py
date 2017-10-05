@@ -69,10 +69,12 @@ class JsonStorageInterface(FileBasedStorageInterface):
         FileBasedStorageInterface.__init__(self, file_ext='.json', metrics_dir=metrics_dir)
 
     def _load(self, filepath):
-        return json.load(filepath)
+        with open(filepath) as fid:
+            return json.load(fid)
 
     def _save(self, filepath, data):
-        json.dump(filepath, _to_flat(data))  # Force numpy arrays to lists
+        with open(filepath, 'w') as fid:
+            json.dump(_to_flat(data), fid)  # Force numpy arrays to lists
 
 # Npy is a actually a great storage format for this:
 class NpyStorageInterface(FileBasedStorageInterface):
