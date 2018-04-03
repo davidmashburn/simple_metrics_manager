@@ -15,6 +15,6 @@ setup(
     license='LICENSE.txt',
     description='Just a simple system to manage a set of metrics (string name / function / returned data) that supports caching (memory and disk)',
     long_description=open('README.md').read(),
-    install_requires=['human_time_formatter >= 1.0.0.5'
+    install_requires=['human_time_formatter >= 1.0.0.6'
                      ],
 )
