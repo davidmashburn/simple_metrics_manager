@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import time
 from human_time_formatter import format_seconds
 
@@ -29,18 +31,18 @@ class DatedCacheManager(object):
             if name not in self.functions_dict:
                 raise ValueError('{} does not have a compute function defined!'.format(name))
             if verbose:
-                print 'Compute {}'.format(name)
+                print('Compute {}'.format(name))
             t = time.time()
             self.cache[name] = self.functions_dict[name]()
             if verbose:
-                print 'Completed {} in {}'.format(name, format_seconds(time.time() - t, ndigits=6))
+                print('Completed {} in {}'.format(name, format_seconds(time.time() - t, ndigits=6)))
             
         return self.cache[name]
     
     def _save(self, name, data, verbose=True):
         '''Save data as the name metric (and today's date in a sidecar)'''
         if verbose:
-            print 'Save {}'.format(name)
+            print('Save {}'.format(name))
         self.storage_interface.save(name, data)
         self.storage_interface.save(name + _DATE, today())
     
@@ -55,7 +57,7 @@ class DatedCacheManager(object):
         '''Load the stored value into the in-memory cache'''
         self.cache[name + _DATE] = self.storage_interface.load(name + _DATE)
         if verbose:
-            print 'Load {} pulled on {}'.format(name, self.cache[name + _DATE])
+            print('Load {} pulled on {}'.format(name, self.cache[name + _DATE]))
         self.cache[name] = self.storage_interface.load(name)
     
     def load(self, name, force=False, verbose=True):
