@@ -97,7 +97,7 @@ class CollectingDatedCacheManager():
             if cache:
                 return self.get(name, useStored=use_stored)
             else:
-                return self.functions_dict[name]()
+                return f()
         
         return newf
 
@@ -106,30 +106,37 @@ def _default_name_generation_function(base_name, params):
 
 def ParameterizedDatedCacheManager(object):
     def __init__(self, *args, **kwds):
-        self.parameterized_functions = []
+        self.dynamic_metric_creation = keds.pop('dynamic_metric_creation', False)
+        self.parameterized_metrics = []
         return DatedCacheManager.__init__(self, *args, **kwds)
     
-    def _append_to_parameterized_functions(self, f, base_name, params_list, name_generation_function):
-        @functools.wraps(f)
-        def newf_caching(*params, **kwds):
-            use_stored = kwds.pop('use_stored', True)
-            
-            metric_name = name_generation_function(base_name, params)
-            if metric_name not in self.functions_dict:
+    def build_metric_name(self, f, base_name, params, name_generation_function, create_missing=False):
+        create_missing = create_missing or self.dynamic_metric_creation
+        metric_name = name_generation_function(base_name, params)
+        if metric_name not in self.functions_dict:
+            if create_missing:
+                self.functions_dict[metric_name] = functools.partial(f, *params)
+            else:
                 raise ValueError('This function with these parameters is not implemented for caching')
+        return metric_name
 
+    def create_parameterized_metric(self, f, base_name, params_list, name_generation_function):
+        '''Also adds the function to self as a method and appends it to parameterized_metrics'''
+        @functools.wraps(f)
+        def f_caching(*params, **kwds):
+            use_stored = kwds.pop('use_stored', True)
+            metric_name = self.build_metric_name(f, base_name, params, name_generation_function)
             return self.get(metric_name, useStored=use_stored)
         
-        newf_caching.base_name = base_name
-        newf_caching.params_list = params_list
-        newf_caching.name_generation_function = name_generation_function
-        setattr(self, base_name, newf_caching)
-        self.parameterized_functions.append(newf_caching)
-    
-    def _add_metrics_to_functions_dict(self, f, base_name, params_list, name_generation_function):
-        for params in params_list:
-            metric_name = name_generation_function(base_name, params)
-            self.functions_dict[metric_name] = functools.partial(f, *params)
+        f_caching.original_function = f
+        f_caching.base_name = base_name
+        f_caching.params_list = params_list
+        f_caching.name_generation_function = name_generation_function
+
+        self.parameterized_metrics.append(f_caching)
+        setattr(self, base_name, f_caching)
+
+        return f_caching
     
     def collect(self,
                 f,
@@ -143,24 +150,19 @@ def ParameterizedDatedCacheManager(object):
             name_generation_function
         )
         
-        self._add_metrics_to_functions_dict(f, base_name, params_list, name_generation_function)
+        # Add metrics to functions dict
+        for params in params_list:
+            self.build_metric_name(f, base_name, params, name_generation_function, create_missing=True)
 
-        self._append_to_parameterized_functions(f, base_name, params_list, name_generation_function)
+        f_caching = self.create_parameterized_metric(f, base_name, params_list, name_generation_function)
 
         @functools.wraps(f)
         def newf(*params, **kwds):
             cache = kwds.pop('cache', False)
-            use_stored = kwds.pop('use_stored', True)
-            
-            metric_name = name_generation_function(base_name, params)
-            if metric_name not in self.functions_dict:
-                raise ValueError('This function with these parameters is not implemented for caching')
             
             if cache:
-                return self.get(metric_name,     useStored=use_stored)
+                return f_caching(*params, **kwds)
             else:
-                fun = self.functions_dict[metric_name]
-                
-                return fun(*params)
+                return f(*params)
 
         return newf
