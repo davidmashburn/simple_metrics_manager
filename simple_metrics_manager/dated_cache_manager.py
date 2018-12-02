@@ -1,6 +1,7 @@
 from __future__ import print_function
 
 import time
+import functools
 from human_time_formatter import format_seconds
 
 _DATE = '_date'
@@ -81,3 +82,85 @@ class DatedCacheManager(object):
     
     def __getitem__(self, key):
         return self.get(key)
+
+class CollectingDatedCacheManager():
+    def __init__(self, *args, **kwds):
+        return DatedCacheManager.__init__(self, *args, **kwds)
+
+    def collect(self, f, name=None):
+        name = f.__name__ if name is None else name
+        
+        self.functions_dict[name] = f
+        
+        @functools.wraps(f)
+        def newf(cache=False, use_stored=True):
+            if cache:
+                return self.get(name, useStored=use_stored)
+            else:
+                return self.functions_dict[name]()
+        
+        return newf
+
+def _default_name_generation_function(base_name, params):
+    return '_'.join((base_name, ) + tuple(params)).replace('.', 'p')
+
+def ParameterizedDatedCacheManager(object):
+    def __init__(self, *args, **kwds):
+        self.parameterized_functions = []
+        return DatedCacheManager.__init__(self, *args, **kwds)
+    
+    def _append_to_parameterized_functions(self, f, base_name, params_list, name_generation_function):
+        @functools.wraps(f)
+        def newf_caching(*params, **kwds):
+            use_stored = kwds.pop('use_stored', True)
+            
+            metric_name = name_generation_function(base_name, params)
+            if metric_name not in self.functions_dict:
+                raise ValueError('This function with these parameters is not implemented for caching')
+
+            return self.get(metric_name, useStored=use_stored)
+        
+        newf_caching.base_name = base_name
+        newf_caching.params_list = params_list
+        newf_caching.name_generation_function = name_generation_function
+        setattr(self, base_name, newf_caching)
+        self.parameterized_functions.append(newf_caching)
+    
+    def _add_metrics_to_functions_dict(self, f, base_name, params_list, name_generation_function):
+        for params in params_list:
+            metric_name = name_generation_function(base_name, params)
+            self.functions_dict[metric_name] = functools.partial(f, *params)
+    
+    def collect(self,
+                f,
+                base_name=None,
+                params_list=(),
+                name_generation_function=None):
+        base_name = f.__name__ if base_name is None else base_name
+        name_generation_function = (
+            _default_name_generation_function
+            if name_generation_function is None else
+            name_generation_function
+        )
+        
+        self._add_metrics_to_functions_dict(f, base_name, params_list, name_generation_function)
+
+        self._append_to_parameterized_functions(f, base_name, params_list, name_generation_function)
+
+        @functools.wraps(f)
+        def newf(*params, **kwds):
+            cache = kwds.pop('cache', False)
+            use_stored = kwds.pop('use_stored', True)
+            
+            metric_name = name_generation_function(base_name, params)
+            if metric_name not in self.functions_dict:
+                raise ValueError('This function with these parameters is not implemented for caching')
+            
+            if cache:
+                return self.get(metric_name,     useStored=use_stored)
+            else:
+                fun = self.functions_dict[metric_name]
+                
+                return fun(*params)
+
+        return newf
