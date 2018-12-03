@@ -83,7 +83,7 @@ class DatedCacheManager(object):
     def __getitem__(self, key):
         return self.get(key)
 
-class CollectingDatedCacheManager():
+class CollectingDatedCacheManager(DatedCacheManager):
     def __init__(self, *args, **kwds):
         return DatedCacheManager.__init__(self, *args, **kwds)
 
@@ -95,18 +95,40 @@ class CollectingDatedCacheManager():
         @functools.wraps(f)
         def newf(cache=False, use_stored=True):
             if cache:
-                return self.get(name, useStored=use_stored)
+                return self.get(name, use_stored=use_stored)
             else:
                 return f()
         
         return newf
 
-def _default_name_generation_function(base_name, params):
-    return '_'.join((base_name, ) + tuple(params)).replace('.', 'p')
+def doublewrap_class_method(f):
+    '''
+    a decorator decorator, allowing the decorator to be used as:
+    @decorator(with, arguments, and=kwargs)
+    or
+    @decorator
+    lifted from this StackOverflow answer:
+    http://stackoverflow.com/questions/653368/how-to-create-a-python-decorator-that-can-be-used-either-with-or-without-paramet
+    '''
+    @functools.wraps(f)
+    def new_dec(self, *args, **kwargs):
+        if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
+            # actual decorated function
+            return f(self, args[0]) # use the basic decorator pattern
+        else:
+            # decorator arguments
+            def newf(realf):
+                return f(self, realf, *args, **kwargs) # use the nested decorator pattern
+            return newf
 
-def ParameterizedDatedCacheManager(object):
+    return new_dec
+
+def _default_name_generation_function(base_name, params):
+    return '_'.join(([base_name] + list(map(str, params)))).replace('.', 'p')
+
+class ParameterizedDatedCacheManager(DatedCacheManager):
     def __init__(self, *args, **kwds):
-        self.dynamic_metric_creation = keds.pop('dynamic_metric_creation', False)
+        self.dynamic_metric_creation = kwds.pop('dynamic_metric_creation', False)
         self.parameterized_metrics = []
         return DatedCacheManager.__init__(self, *args, **kwds)
     
@@ -126,7 +148,7 @@ def ParameterizedDatedCacheManager(object):
         def f_caching(*params, **kwds):
             use_stored = kwds.pop('use_stored', True)
             metric_name = self.build_metric_name(f, base_name, params, name_generation_function)
-            return self.get(metric_name, useStored=use_stored)
+            return self.get(metric_name, use_stored=use_stored)
         
         f_caching.original_function = f
         f_caching.base_name = base_name
@@ -138,10 +160,11 @@ def ParameterizedDatedCacheManager(object):
 
         return f_caching
     
+    @doublewrap_class_method
     def collect(self,
                 f,
                 base_name=None,
-                params_list=(),
+                params_list=((),),
                 name_generation_function=None):
         base_name = f.__name__ if base_name is None else base_name
         name_generation_function = (
