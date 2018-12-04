@@ -149,11 +149,16 @@ class ParameterizedDatedCacheManager(DatedCacheManager):
             use_stored = kwds.pop('use_stored', True)
             metric_name = self.build_metric_name(f, base_name, params, name_generation_function)
             return self.get(metric_name, use_stored=use_stored)
-        
+
+        def get_all(**kwds):
+            return [f_caching(*params, **kwds)
+                    for params in params_list]
+
         f_caching.original_function = f
         f_caching.base_name = base_name
         f_caching.params_list = params_list
         f_caching.name_generation_function = name_generation_function
+        f_caching.get_all = get_all
 
         self.parameterized_metrics.append(f_caching)
         setattr(self, base_name, f_caching)
