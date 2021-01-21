@@ -87,6 +87,9 @@ class NpyStorageInterface(FileBasedStorageInterface):
     def _save(self, filepath, data):
         np.save(filepath, data)
 
+def _int_after_underscore(x):
+    return int(x.split('_')[1])
+
 class NpzStorageInterface(FileBasedStorageInterface):
     '''A StorageInterface that allows entries to include multiple arrays.
 
@@ -104,7 +107,7 @@ class NpzStorageInterface(FileBasedStorageInterface):
         val = np.load(filepath, allow_pickle=self.allow_pickle)
         return (dict(val) if 'arr_0' not in val.files else  # Return dictionary
                 val['arr_0'] if len(val.files) == 1 else    # Return singleton
-                [val[k] for k in sorted(val.files)])        # Return list
+                [val[k] for k in sorted(val.files, key=_int_after_underscore)])        # Return list
 
     def _save(self, filepath, data):
         args, kwds = (([], data)                           # Use dictionary storage
