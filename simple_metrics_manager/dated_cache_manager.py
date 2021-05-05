@@ -177,7 +177,14 @@ class ParameterizedDatedCacheManager(DatedCacheManager):
             return self.get(metric_name, use_stored=use_stored)
 
         def get_all(**kwds):
-            return [f_caching(*params, **kwds) for params in params_list]
+            verbose = kwds.pop("verbose", False)
+            all_values = []
+            for i, params in enumerate(params_list):
+                if verbose:
+                    print(f"get_all {i}/{len(params_list)}")
+                all_values.append(f_caching(*params, **kwds))
+
+            return all_values
 
         f_caching.original_function = f
         f_caching.base_name = base_name
